@@ -1,0 +1,14 @@
+{
+  "name": "mt-actions",
+  "version": "0.0.0-stub",
+  "description": "Stub replacement for the unavailable private mt-actions library. Provides no-op static inline implementations of the full mta_* API so the firmware compiles without it.",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "srcFilter": "-<*>",
+    "flags": []
+  }
+}
