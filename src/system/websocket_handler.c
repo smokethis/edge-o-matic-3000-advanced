@@ -183,6 +183,7 @@ void websocket_close_fd(httpd_handle_t hd, int sockfd) {
             if (client->send_mutex != NULL) {
                 vSemaphoreDelete(client->send_mutex);
             }
+            free(client);
             return;
         }
     }
