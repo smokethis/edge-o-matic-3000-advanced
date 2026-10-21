@@ -45,11 +45,16 @@ esp_err_t websocket_broadcast(cJSON* root, int broadcast_flags) {
     websocket_client_t* client = NULL;
     list_foreach(_client_list, client) {
         if (client->broadcast_flags & broadcast_flags) {
-            esp_err_t err = websocket_send_to_client(client, str);
-            if (err != ESP_OK) {
-                ESP_LOGW(
-                    TAG, "Broadcast send failed for fd %d: %s", client->fd, esp_err_to_name(err)
-                );
+            // Each client gets its own copy for async send
+            char* copy = strdup(str);
+            if (copy) {
+                esp_err_t err = websocket_send_to_client(client, copy);
+                free(copy);  // Safe to free after httpd copies internally
+                if (err != ESP_OK) {
+                    ESP_LOGW(
+                        TAG, "Broadcast send failed for fd %d: %s", client->fd, esp_err_to_name(err)
+                    );
+                }
             }
         }
     }
@@ -57,6 +62,7 @@ esp_err_t websocket_broadcast(cJSON* root, int broadcast_flags) {
     cJSON_free(str);
     return ESP_OK;
 }
+
 
 static void _json_add_error(cJSON* root, const char* error) {
     const char* err_key = "error";
