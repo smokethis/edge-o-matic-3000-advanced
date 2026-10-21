@@ -94,8 +94,7 @@ typedef enum {
 /* ---------- Config schema model ---------- */
 
 typedef enum {
-    MTA_CONFIG_TYPE_NONE = 0,
-    MTA_CONFIG_TYPE_BOOL,
+    MTA_CONFIG_TYPE_BOOL = 0,
     MTA_CONFIG_TYPE_INT,
     MTA_CONFIG_TYPE_STRING,
 } mta_config_type_t;
