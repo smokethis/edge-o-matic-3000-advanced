@@ -26,7 +26,10 @@ esp_err_t websocket_send_to_client(websocket_client_t* client, const char* msg) 
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
     ws_pkt.final = true;
 
-    return httpd_ws_send_frame_async(client->server, client->fd, &ws_pkt);
+    xSemaphoreTake(client->send_mutex, portMAX_DELAY);
+    esp_err_t err = httpd_ws_send_frame_async(client->server, client->fd, &ws_pkt);
+    xSemaphoreGive(client->send_mutex);
+    return err;
 }
 
 esp_err_t websocket_broadcast(cJSON* root, int broadcast_flags) {
@@ -153,6 +156,12 @@ esp_err_t websocket_open_fd(httpd_handle_t hd, int sockfd) {
     client->fd = sockfd;
     client->server = hd;
     client->broadcast_flags = 0;
+    client->send_mutex = xSemaphoreCreateMutex();
+    if (client->send_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create send mutex");
+        free(client);
+        return ESP_ERR_NO_MEM;
+    }
     list_add(&_client_list, client);
     // Let ESP-IDF handle cleanup of client context on socket close:
     httpd_sess_set_ctx(hd, sockfd, client, free);
@@ -165,6 +174,9 @@ void websocket_close_fd(httpd_handle_t hd, int sockfd) {
     list_foreach(_client_list, client) {
         if (client->fd == sockfd) {
             list_remove(&_client_list, client);
+            if (client->send_mutex != NULL) {
+                vSemaphoreDelete(client->send_mutex);
+            }
             return;
         }
     }
@@ -223,13 +235,14 @@ esp_err_t websocket_handler(httpd_req_t* req) {
         cJSON* command = cJSON_Parse((char*)ws_pkt.payload);
         cJSON* response = cJSON_CreateObject();
 
+        websocket_client_t* client = (websocket_client_t*)req->sess_ctx;
         if (command == NULL) {
             _json_add_error(response, cJSON_GetErrorPtr());
         } else {
-            if (req->sess_ctx == NULL) {
+            if (client == NULL) {
                 ESP_LOGE(TAG, "Request session context was NULL!");
             } else {
-                websocket_run_commands(command, response, (websocket_client_t*)req->sess_ctx);
+                websocket_run_commands(command, response, client);
             }
         }
 
@@ -238,7 +251,14 @@ esp_err_t websocket_handler(httpd_req_t* req) {
             resp_pkt.len = strlen((char*)resp_pkt.payload);
 
             ESP_LOGI(TAG, "Transmitting response: %s", resp_pkt.payload);
+
+            if (client != NULL && client->send_mutex != NULL) {
+                xSemaphoreTake(client->send_mutex, portMAX_DELAY);
+            }
             ret = httpd_ws_send_frame(req, &resp_pkt);
+            if (client != NULL && client->send_mutex != NULL) {
+                xSemaphoreGive(client->send_mutex);
+            }
         }
 
         if (command != NULL) cJSON_Delete(command);

@@ -5,6 +5,7 @@
 #include "console.h"
 #include "esp_err.h"
 #include "esp_http_server.h"
+#include "freertos/semphr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,6 +15,7 @@ struct websocket_client {
     httpd_handle_t server;
     int fd;
     int broadcast_flags;
+    SemaphoreHandle_t send_mutex;
 };
 
 typedef struct websocket_client websocket_client_t;
